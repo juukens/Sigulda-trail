@@ -1,0 +1,535 @@
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Sigulda Trail</title>
+
+<link
+  rel="stylesheet"
+  href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"
+/>
+<link
+  rel="preconnect"
+  href="https://fonts.googleapis.com"
+/>
+<link
+  href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&display=swap"
+  rel="stylesheet"
+/>
+
+<style>
+  :root {
+    --pine: #1b3a2b;
+    --pine-deep: #122a1f;
+    --orange: #e8631a;
+    --orange-bright: #ff7a2f;
+    --gps-blue: #2563eb;
+    --cream: #f5f0e6;
+    --cream-line: #fffaf0;
+    --charcoal: #1e1f1a;
+    --muted: #6f7468;
+    --display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+    --body: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--pine-deep);
+    font-family: var(--body);
+    color: var(--charcoal);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  #map {
+    position: absolute;
+    inset: 0;
+    background: #dfe4d8;
+    z-index: 0;
+  }
+
+  /* ---------- Header ---------- */
+  .topbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: calc(env(safe-area-inset-top) + 12px) 16px 14px;
+    background: linear-gradient(180deg, rgba(18,42,31,0.96) 0%, rgba(18,42,31,0.82) 70%, rgba(18,42,31,0) 100%);
+    pointer-events: none;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    min-width: 0;
+  }
+  .brand .blaze {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1px;
+    color: var(--pine-deep);
+    background: var(--orange);
+    padding: 2px 7px 1px;
+    border-radius: 4px;
+    flex: none;
+    transform: translateY(-1px);
+  }
+  .brand h1 {
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 22px;
+    line-height: 1;
+    letter-spacing: 0.5px;
+    color: var(--cream);
+    margin: 0;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .status {
+    pointer-events: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    flex: none;
+    padding: 6px 11px;
+    border-radius: 999px;
+    background: rgba(245,240,230,0.14);
+    border: 1px solid rgba(245,240,230,0.2);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cream);
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+  }
+  .status .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--muted);
+    flex: none;
+  }
+  .status.searching .dot { background: var(--orange-bright); animation: pulse-dot 1.1s ease-in-out infinite; }
+  .status.live .dot { background: #4ade80; }
+  .status.off .dot { background: #ef4444; }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+  }
+
+  /* ---------- Bottom controls ---------- */
+  .bottom {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 16px calc(env(safe-area-inset-bottom) + 16px);
+    pointer-events: none;
+  }
+
+  .legend {
+    pointer-events: none;
+    background: rgba(245,240,230,0.94);
+    border: 1px solid rgba(27,58,43,0.12);
+    border-radius: 14px;
+    padding: 10px 13px;
+    box-shadow: 0 6px 20px rgba(18,42,31,0.22);
+    font-size: 12.5px;
+    line-height: 1.45;
+    max-width: 62%;
+  }
+  .legend .row { display: flex; align-items: center; gap: 8px; }
+  .legend .row + .row { margin-top: 5px; }
+  .legend .swatch { width: 16px; height: 16px; border-radius: 5px; flex: none; }
+  .legend .swatch.route { border-radius: 2px; height: 5px; background: var(--pine); border: 1px solid var(--cream-line); }
+  .legend .swatch.cp { background: var(--orange); color: #fff; font-family: var(--display); font-weight: 700; font-size: 11px; display: grid; place-items: center; }
+  .legend .swatch.me { background: var(--gps-blue); border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.15); }
+  .legend b { font-weight: 600; color: var(--charcoal); }
+  .legend .muted { color: var(--muted); }
+
+  .recenter {
+    pointer-events: auto;
+    flex: none;
+    width: 58px; height: 58px;
+    border-radius: 18px;
+    border: none;
+    background: var(--orange);
+    color: #fff;
+    box-shadow: 0 8px 22px rgba(232,99,26,0.45);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    transition: transform 0.12s ease, background 0.15s ease;
+  }
+  .recenter:active { transform: scale(0.93); background: var(--orange-bright); }
+  .recenter svg { width: 26px; height: 26px; }
+  .recenter.disabled { background: var(--muted); box-shadow: none; cursor: default; }
+
+  /* ---------- Map markers ---------- */
+  .cp-marker {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 16px;
+    color: #fff;
+    width: 30px; height: 30px;
+    background: var(--orange);
+    border: 2.5px solid var(--cream-line);
+    border-radius: 9px;
+    display: grid;
+    place-items: center;
+    box-shadow: 0 3px 9px rgba(18,42,31,0.4);
+    transform: rotate(0deg);
+  }
+  .terminus {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: #fff;
+    padding: 4px 9px;
+    border-radius: 999px;
+    border: 2px solid var(--cream-line);
+    box-shadow: 0 3px 9px rgba(18,42,31,0.4);
+    white-space: nowrap;
+    text-transform: uppercase;
+  }
+  .terminus.start { background: var(--pine); }
+  .terminus.finish { background: var(--charcoal); }
+
+  .me-dot {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    background: var(--gps-blue);
+    border: 3px solid #fff;
+    box-shadow: 0 0 0 1px rgba(0,0,0,0.2), 0 2px 6px rgba(0,0,0,0.3);
+  }
+  .me-pulse {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--gps-blue);
+    opacity: 0.35;
+    animation: ring 2s ease-out infinite;
+  }
+  @keyframes ring {
+    0% { transform: scale(1); opacity: 0.4; }
+    100% { transform: scale(3.4); opacity: 0; }
+  }
+
+  /* ---------- Overlay message ---------- */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(18,42,31,0.55);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+  .overlay.show { display: flex; }
+  .card {
+    background: var(--cream);
+    border-radius: 20px;
+    padding: 26px 24px 22px;
+    max-width: 340px;
+    width: 100%;
+    box-shadow: 0 18px 50px rgba(18,42,31,0.5);
+    text-align: left;
+  }
+  .card .icon {
+    width: 46px; height: 46px;
+    border-radius: 13px;
+    background: var(--orange);
+    display: grid; place-items: center;
+    margin-bottom: 14px;
+  }
+  .card .icon svg { width: 26px; height: 26px; }
+  .card h2 {
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 24px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin: 0 0 8px;
+    color: var(--pine-deep);
+  }
+  .card p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: #44483d; }
+  .card button {
+    width: 100%;
+    border: none;
+    background: var(--pine);
+    color: var(--cream);
+    font-family: var(--display);
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    padding: 13px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .card button:active { background: var(--pine-deep); }
+
+  .leaflet-control-attribution { font-size: 9px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .me-pulse, .status .dot { animation: none !important; }
+  }
+</style>
+
+<div id="map"></div>
+
+<div class="topbar">
+  <div class="brand">
+    <span class="blaze">CP</span>
+    <h1>Sigulda Trail</h1>
+  </div>
+  <div class="status searching" id="status">
+    <span class="dot"></span>
+    <span id="statusText">Locating you…</span>
+  </div>
+</div>
+
+<div class="bottom">
+  <div class="legend">
+    <div class="row"><span class="swatch route"></span><span><b>The trail</b> — follow the line</span></div>
+    <div class="row"><span class="swatch cp">3</span><span><b>Checkpoints</b> 1&ndash;6 in order</span></div>
+    <div class="row"><span class="swatch me"></span><span><b>You</b> — only you see this</span></div>
+  </div>
+  <button class="recenter" id="recenter" title="Center on me" aria-label="Center on me">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/>
+      <circle cx="12" cy="12" r="7"/>
+      <line x1="12" y1="1.5" x2="12" y2="4.5"/>
+      <line x1="12" y1="19.5" x2="12" y2="22.5"/>
+      <line x1="1.5" y1="12" x2="4.5" y2="12"/>
+      <line x1="19.5" y1="12" x2="22.5" y2="12"/>
+    </svg>
+  </button>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="card">
+    <div class="icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 21s-7-6.5-7-11a7 7 0 0 1 14 0c0 4.5-7 11-7 11z"/>
+        <circle cx="12" cy="10" r="2.5"/>
+      </svg>
+    </div>
+    <h2 id="ovTitle">Turn on location</h2>
+    <p id="ovBody">This map needs your location to show where you are on the trail. Tap below and choose <b>Allow</b>.</p>
+    <button id="ovBtn">Enable location</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // ---- The Sigulda loop (start & finish almost the same spot) ----
+  var ROUTE = [
+    [57.1620, 24.8550], // start / finish
+    [57.1628, 24.8535],
+    [57.1636, 24.8515],
+    [57.1641, 24.8498], // CP1 (near cable car)
+    [57.1650, 24.8485],
+    [57.1662, 24.8478],
+    [57.1675, 24.8482], // CP2
+    [57.1688, 24.8495],
+    [57.1697, 24.8515],
+    [57.1701, 24.8540], // CP3
+    [57.1699, 24.8565],
+    [57.1692, 24.8588],
+    [57.1681, 24.8603], // CP4
+    [57.1668, 24.8612],
+    [57.1654, 24.8612],
+    [57.1643, 24.8602], // CP5
+    [57.1636, 24.8588],
+    [57.1633, 24.8572],
+    [57.1628, 24.8560], // CP6
+    [57.1623, 24.8553],
+    [57.1620, 24.8550]  // back to start
+  ];
+
+  // checkpoint number -> index in ROUTE
+  var CHECKPOINTS = [
+    { n: 1, i: 3 },
+    { n: 2, i: 6 },
+    { n: 3, i: 9 },
+    { n: 4, i: 12 },
+    { n: 5, i: 15 },
+    { n: 6, i: 18 }
+  ];
+
+  var START = ROUTE[0];
+
+  // ---- Map ----
+  var map = L.map("map", {
+    zoomControl: false,
+    attributionControl: true
+  });
+  L.control.zoom({ position: "topleft" }).addTo(map);
+
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  // route casing + line
+  L.polyline(ROUTE, { color: "#fffaf0", weight: 9, opacity: 0.95, lineJoin: "round", lineCap: "round" }).addTo(map);
+  L.polyline(ROUTE, { color: "#1b3a2b", weight: 5, opacity: 1, lineJoin: "round", lineCap: "round" }).addTo(map);
+
+  // checkpoint markers
+  CHECKPOINTS.forEach(function (cp) {
+    L.marker(ROUTE[cp.i], {
+      icon: L.divIcon({
+        className: "",
+        html: '<div class="cp-marker">' + cp.n + "</div>",
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      }),
+      interactive: false,
+      keyboard: false
+    }).addTo(map);
+  });
+
+  // start + finish (offset finish label slightly so both read)
+  L.marker(START, {
+    icon: L.divIcon({ className: "", html: '<div class="terminus start">Start</div>', iconSize: [0, 0], iconAnchor: [-10, 30] }),
+    interactive: false, keyboard: false
+  }).addTo(map);
+  L.marker(START, {
+    icon: L.divIcon({ className: "", html: '<div class="terminus finish">Finish</div>', iconSize: [0, 0], iconAnchor: [44, -2] }),
+    interactive: false, keyboard: false
+  }).addTo(map);
+
+  // fit the whole route to start
+  var routeBounds = L.latLngBounds(ROUTE).pad(0.18);
+  map.fitBounds(routeBounds);
+
+  // ---- User position (only this device sees it) ----
+  var meMarker = null;
+  var accuracyCircle = null;
+  var hasCentered = false;
+  var watchId = null;
+
+  var statusEl = document.getElementById("status");
+  var statusText = document.getElementById("statusText");
+  var overlay = document.getElementById("overlay");
+  var ovTitle = document.getElementById("ovTitle");
+  var ovBody = document.getElementById("ovBody");
+  var ovBtn = document.getElementById("ovBtn");
+  var recenterBtn = document.getElementById("recenter");
+
+  function setStatus(state, text) {
+    statusEl.className = "status " + state;
+    statusText.textContent = text;
+  }
+
+  function showOverlay(title, body) {
+    ovTitle.textContent = title;
+    ovBody.innerHTML = body;
+    overlay.classList.add("show");
+  }
+  function hideOverlay() { overlay.classList.remove("show"); }
+
+  function meIcon() {
+    return L.divIcon({
+      className: "",
+      html: '<div style="position:relative;width:22px;height:22px;"><div class="me-pulse"></div><div class="me-dot"></div></div>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11]
+    });
+  }
+
+  function onPosition(pos) {
+    var lat = pos.coords.latitude;
+    var lng = pos.coords.longitude;
+    var acc = pos.coords.accuracy || 0;
+    var ll = [lat, lng];
+
+    setStatus("live", "GPS active");
+    hideOverlay();
+
+    if (!meMarker) {
+      meMarker = L.marker(ll, { icon: meIcon(), zIndexOffset: 1000, interactive: false }).addTo(map);
+      accuracyCircle = L.circle(ll, { radius: acc, color: "#2563eb", weight: 1, opacity: 0.5, fillColor: "#2563eb", fillOpacity: 0.08 }).addTo(map);
+    } else {
+      meMarker.setLatLng(ll);
+      accuracyCircle.setLatLng(ll).setRadius(acc);
+    }
+
+    if (!hasCentered) {
+      hasCentered = true;
+      map.setView(ll, 16, { animate: true });
+    }
+  }
+
+  function onError(err) {
+    if (err.code === 1) { // denied
+      setStatus("off", "Location blocked");
+      showOverlay(
+        "Location is blocked",
+        "Allow location for this page in your browser settings, then reload. On iPhone, open this in <b>Safari</b> (not inside another app) for it to work."
+      );
+    } else if (err.code === 2) { // unavailable
+      setStatus("off", "No GPS signal");
+      showOverlay("No GPS signal", "Your device can&rsquo;t get a location right now. Make sure location services are on and you have signal, then try again.");
+    } else { // timeout
+      setStatus("searching", "Still searching…");
+    }
+  }
+
+  function startWatching() {
+    if (!("geolocation" in navigator)) {
+      setStatus("off", "No GPS");
+      showOverlay("Location not supported", "This device or browser doesn&rsquo;t support location. Try opening the link in Safari or Chrome.");
+      return;
+    }
+    setStatus("searching", "Locating you…");
+    if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+    watchId = navigator.geolocation.watchPosition(onPosition, onError, {
+      enableHighAccuracy: true,
+      maximumAge: 3000,
+      timeout: 20000
+    });
+  }
+
+  // recenter button
+  recenterBtn.addEventListener("click", function () {
+    if (meMarker) {
+      map.setView(meMarker.getLatLng(), 16, { animate: true });
+    } else {
+      map.fitBounds(routeBounds);
+      startWatching();
+    }
+  });
+
+  // overlay button re-requests location
+  ovBtn.addEventListener("click", function () {
+    hideOverlay();
+    startWatching();
+  });
+
+  // kick off
+  startWatching();
+})();
+</script>
